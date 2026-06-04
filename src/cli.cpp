@@ -10515,9 +10515,14 @@ int Cli::run_bucket(const std::vector<std::string>& args, std::ostream& out, std
                 if (found != known.end()) {
                     source = found->repository;
                 } else {
-                    out << "Unknown bucket '" << args[2] << "'. Try specifying <repo>.\n"
-                        << usage_add << '\n';
-                    return 1;
+                    const auto fallback = known_bucket_repository(environment, args[2]);
+                    if (fallback) {
+                        source = *fallback;
+                    } else {
+                        out << "Unknown bucket '" << args[2] << "'. Try specifying <repo>.\n"
+                            << usage_add << '\n';
+                        return 1;
+                    }
                 }
             } else {
                 source = args[3];
