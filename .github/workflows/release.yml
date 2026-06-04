@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
+
 jobs:
   build:
     runs-on: windows-latest
@@ -19,9 +22,20 @@ jobs:
 
       - name: Setup vcpkg
         run: |
-          git clone https://github.com/microsoft/vcpkg.git "$env:RUNNER_TEMP\vcpkg"
-          & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
-          echo "VCPKG_ROOT=$env:RUNNER_TEMP\vcpkg" >> $env:GITHUB_ENV
+          $vcpkgDir = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          if (!(Test-Path $vcpkgDir)) {
+            git clone https://github.com/microsoft/vcpkg.git $vcpkgDir
+          }
+          & "$vcpkgDir\bootstrap-vcpkg.bat" -disableMetrics
+          echo "VCPKG_ROOT=$vcpkgDir" >> $env:GITHUB_ENV
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: build/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
 
       - name: Configure
         run: >
