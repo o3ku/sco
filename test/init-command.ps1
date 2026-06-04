@@ -56,6 +56,8 @@ New-Item -ItemType Directory -Force -Path $Root | Out-Null
 } | ConvertTo-Json | Set-Content -Path (Join-Path $Root 'buckets.json') -Encoding UTF8
 
 $env:SCOOP = $Root
+$originalScoopCache = $env:SCOOP_CACHE
+Remove-Item Env:SCOOP_CACHE -ErrorAction SilentlyContinue
 $env:XDG_CONFIG_HOME = $ConfigHome
 $env:SCOOP_HOME = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $ScoopPs1) '..'))
 $envFile = Join-Path $Root 'env.json'
@@ -67,9 +69,18 @@ if ($LASTEXITCODE -ne 0 -or $help -notmatch 'Usage: sco init') {
     throw "init --help failed or printed unexpected help: $help"
 }
 
-$firstOutput = (& $ScoExe init) -join "`n"
-if ($LASTEXITCODE -ne 0) {
-    throw "first init failed: $firstOutput"
+$originalPath = $env:PATH
+try {
+    $env:PATH = 'C:\Windows\System32;C:\Windows'
+    $firstOutput = (& $ScoExe init) -join "`n"
+    if ($LASTEXITCODE -ne 0) {
+        throw "first init failed: $firstOutput"
+    }
+} finally {
+    $env:PATH = $originalPath
+}
+if ($firstOutput -match 'Git is not installed|7zip is not installed') {
+    throw "init should not bootstrap Git or 7zip for a local non-git main bucket: $firstOutput"
 }
 foreach ($pattern in @(
     'Ensured Scoop directories',
@@ -145,7 +156,7 @@ $listOutput = (& $ScoExe list) -join "`n"
 if ($LASTEXITCODE -ne 0) {
     throw "list after init failed: $listOutput"
 }
-if ($listOutput -notmatch 'sco\s+0\.2\.0') {
+if ($listOutput -notmatch 'sco\s+0\.6\.0') {
     throw "list after init should show sco as a normal installed app: $listOutput"
 }
 if ($listOutput -match 'Install failed') {
@@ -156,7 +167,7 @@ $scoopListOutput = (& powershell -NoProfile -ExecutionPolicy Bypass -File $Scoop
 if ($LASTEXITCODE -ne 0) {
     throw "reference scoop list after init failed: $scoopListOutput"
 }
-if ($scoopListOutput -notmatch 'sco\s+0\.2\.0') {
+if ($scoopListOutput -notmatch 'sco\s+0\.6\.0') {
     throw "reference scoop list after init should show sco as a normal installed app: $scoopListOutput"
 }
 if ($scoopListOutput -match 'Install failed') {
@@ -230,3 +241,6 @@ if ((Get-Item (Join-Path $Root 'buckets\main')).LastWriteTimeUtc -ne $bucketWrit
 }
 
 Remove-Item Env:SCOOP_ENV_FILE -ErrorAction SilentlyContinue
+if ($null -ne $originalScoopCache) {
+    $env:SCOOP_CACHE = $originalScoopCache
+}

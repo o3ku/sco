@@ -8852,6 +8852,63 @@ bool ensure_sco_runtime_metadata(const Environment& environment) {
     return changed;
 }
 
+std::string init_bucket_manifest_url(const Environment& environment, const std::string& app) {
+    const ConfigStore init_config(environment.config_file);
+    std::string github_mirror;
+    if (const auto mirror = init_config.get("github_mirror")) {
+        if (mirror->is_string()) {
+            github_mirror = mirror->get<std::string>();
+        }
+    }
+
+    return github_mirror.empty()
+        ? "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/" + app + ".json"
+        : github_mirror + "/ScoopInstaller/Main/master/bucket/" + app + ".json";
+}
+
+InstallResult install_init_bootstrap_app(
+    const Environment& environment,
+    const std::string& app,
+    std::ostream& err) {
+    const auto manifest_url = init_bucket_manifest_url(environment, app);
+    const auto manifest_path = materialize_manifest_url(environment, manifest_url, err, "init");
+    if (manifest_path.empty()) {
+        throw std::runtime_error("failed to download " + app + " manifest");
+    }
+
+    InstallOptions options;
+    options.independent = true;
+    options.use_cache = false;
+    options.check_hash = false;
+    options.update_scoop = false;
+    return install_manifest_file(environment, manifest_path, options);
+}
+
+void ensure_git_for_init(const Environment& environment, std::ostream& out, std::ostream& err) {
+    if (git_available()) {
+        return;
+    }
+
+    if (!find_7zip(environment)) {
+        out << "7zip is not installed. Installing 7zip...\n";
+        const auto result = install_init_bootstrap_app(environment, "7zip", err);
+        out << "Installed 7zip " << result.version << ".\n";
+    }
+
+    out << "Git is not installed. Installing git...\n";
+    const auto result = install_init_bootstrap_app(environment, "git", err);
+    out << "Installed git " << result.version << ".\n";
+
+    const auto git_bin_dir = result.install_dir / "cmd";
+    std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
+    if (!path.empty()) {
+        path += ";";
+    }
+    path += git_bin_dir.string();
+    _putenv_s("PATH", path.c_str());
+    out << "Added git to PATH for this session.\n";
+}
+
 void ensure_environment_variable(
     const std::string& name,
     const std::filesystem::path& value,
@@ -8936,55 +8993,6 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
             out << "Main bucket is already added.\n";
         } else {
             try {
-                if (!git_available()) {
-                    const ConfigStore init_config(environment.config_file);
-                    std::string github_mirror;
-                    if (const auto mirror = init_config.get("github_mirror")) {
-                        if (mirror->is_string()) {
-                            github_mirror = mirror->get<std::string>();
-                        }
-                    }
-                    auto make_manifest_url = [&](const std::string& app) -> std::string {
-                        return github_mirror.empty()
-                            ? "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/" + app + ".json"
-                            : github_mirror + "/ScoopInstaller/Main/master/bucket/" + app + ".json";
-                    };
-
-                    if (!find_7zip(environment)) {
-                        out << "7zip is not installed. Installing 7zip...\n";
-                        const auto seven_zip_manifest = materialize_manifest_url(environment, make_manifest_url("7zip"), err, "init");
-                        if (seven_zip_manifest.empty()) {
-                            throw std::runtime_error("failed to download 7zip manifest");
-                        }
-                        InstallOptions sz_options;
-                        sz_options.independent = true;
-                        sz_options.use_cache = false;
-                        sz_options.check_hash = false;
-                        sz_options.update_scoop = false;
-                        const auto sz_result = install_manifest_file(environment, seven_zip_manifest, sz_options);
-                        out << "Installed 7zip " << sz_result.version << ".\n";
-                    }
-
-                    out << "Git is not installed. Installing git...\n";
-                    const auto git_manifest = materialize_manifest_url(environment, make_manifest_url("git"), err, "init");
-                    if (git_manifest.empty()) {
-                        throw std::runtime_error("failed to download git manifest");
-                    }
-                    InstallOptions git_options;
-                    git_options.independent = true;
-                    git_options.use_cache = false;
-                    git_options.check_hash = false;
-                    git_options.update_scoop = false;
-                    const auto git_result = install_manifest_file(environment, git_manifest, git_options);
-                    out << "Installed git " << git_result.version << ".\n";
-                    const auto git_bin_dir = git_result.install_dir / "cmd";
-                    std::string original_path = std::getenv("PATH") ? std::getenv("PATH") : "";
-                    if (!original_path.empty()) original_path += ";";
-                    original_path += git_bin_dir.string();
-                    _putenv_s("PATH", original_path.c_str());
-                    out << "Added git to PATH for this session.\n";
-                }
-
                 const auto repository = known_bucket_repository(environment, "main");
                 if (!repository) {
                     err << "WARN  Cannot find the known 'main' bucket repository.\n";
@@ -8995,6 +9003,7 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                         const auto result = add_local_bucket(environment, "main", source_path);
                         added = result.changed;
                     } else {
+                        ensure_git_for_init(environment, out, err);
                         const auto result = add_git_bucket(environment, "main", *repository);
                         added = result.changed;
                     }
