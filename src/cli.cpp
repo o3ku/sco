@@ -8939,35 +8939,23 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                 const auto repository = known_bucket_repository(environment, "main");
                 if (!repository) {
                     err << "WARN  Cannot find the known 'main' bucket repository.\n";
+                } else if (!git_available()) {
+                    err << "ERROR Git is not installed. Please install Git first: https://git-scm.com\n";
                 } else {
                     const auto source_path = std::filesystem::path(*repository);
                     bool added = false;
                     if (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git")) {
                         const auto result = add_local_bucket(environment, "main", source_path);
                         added = result.changed;
-                    } else if (git_available()) {
-                        try {
-                            const auto result = add_git_bucket(environment, "main", *repository);
-                            added = result.changed;
-                        } catch (const std::exception&) {
-                            out << "Downloading main bucket...\n";
-                            const auto result = add_bucket_from_zip(environment, "main", *repository);
-                            added = result.changed;
-                        }
                     } else {
-                        out << "Git not found, downloading main bucket...\n";
-                        const auto result = add_bucket_from_zip(environment, "main", *repository);
+                        const auto result = add_git_bucket(environment, "main", *repository);
                         added = result.changed;
                     }
                     out << (added ? "Added main bucket.\n" : "Main bucket is already added.\n");
                 }
             } catch (const std::exception& bucket_error) {
                 err << "WARN  Could not add main bucket: " << bucket_error.what() << "\n";
-                if (!git_available()) {
-                    err << "Git is not installed. Install Git and retry: https://git-scm.com\n";
-                } else {
-                    err << "You can add it later with: sco bucket add main\n";
-                }
+                err << "You can add it later with: sco bucket add main\n";
             }
         }
 
@@ -10581,16 +10569,11 @@ int Cli::run_bucket(const std::vector<std::string>& args, std::ostream& out, std
             const auto source_path = std::filesystem::path(source);
             if (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git")) {
                 result = add_local_bucket(environment, args[2], source_path);
-            } else if (git_available()) {
-                try {
-                    result = add_git_bucket(environment, args[2], source);
-                } catch (const std::exception&) {
-                    out << "Downloading bucket '" << args[2] << "'...\n";
-                    result = add_bucket_from_zip(environment, args[2], source);
-                }
+            } else if (!git_available()) {
+                err << "ERROR Git is not installed. Please install Git first: https://git-scm.com\n";
+                return 1;
             } else {
-                out << "Git not found, downloading bucket '" << args[2] << "'...\n";
-                result = add_bucket_from_zip(environment, args[2], source);
+                result = add_git_bucket(environment, args[2], source);
             }
             if (!result.changed) {
                 if (result.reason == BucketChangeReason::RepositoryAlreadyExists) {
