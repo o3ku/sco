@@ -112,7 +112,7 @@ $runtimeExe = Join-Path $Root 'apps\sco\current\sco.exe'
 if (!(Test-Path $runtimeExe)) {
     throw 'init did not install sco.exe into the Scoop runtime directory'
 }
-$versionExe = Join-Path $Root 'apps\sco\0.5.0\sco.exe'
+$versionExe = Join-Path $Root 'apps\sco\0.5.1\sco.exe'
 if (!(Test-Path $versionExe)) {
     throw 'init did not install sco.exe into the Scoop runtime version directory'
 }
@@ -125,15 +125,15 @@ if ((Get-Sha256Hex $versionExe) -ne (Get-Sha256Hex $ScoExe)) {
 foreach ($path in @(
     (Join-Path $Root 'apps\sco\current\manifest.json'),
     (Join-Path $Root 'apps\sco\current\install.json'),
-    (Join-Path $Root 'apps\sco\0.5.0\manifest.json'),
-    (Join-Path $Root 'apps\sco\0.5.0\install.json')
+    (Join-Path $Root 'apps\sco\0.5.1\manifest.json'),
+    (Join-Path $Root 'apps\sco\0.5.1\install.json')
 )) {
     if (!(Test-Path $path)) {
         throw "init did not create Scoop-compatible sco metadata: $path"
     }
 }
 $scoManifest = Get-Content (Join-Path $Root 'apps\sco\current\manifest.json') -Raw | ConvertFrom-Json
-if ($scoManifest.version -ne '0.5.0' -or $scoManifest.bin -ne 'sco.exe') {
+if ($scoManifest.version -ne '0.5.1' -or $scoManifest.bin -ne 'sco.exe') {
     throw "sco runtime manifest is invalid: $($scoManifest | ConvertTo-Json -Compress)"
 }
 $shimContent = Get-Content -Path $shim -Raw
@@ -180,7 +180,7 @@ $shimWriteTime = (Get-Item $shim).LastWriteTimeUtc
 $runtimeWriteTime = (Get-Item $runtimeExe).LastWriteTimeUtc
 $versionWriteTime = (Get-Item $versionExe).LastWriteTimeUtc
 $runtimeManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\current\manifest.json')).LastWriteTimeUtc
-$versionManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\0.5.0\manifest.json')).LastWriteTimeUtc
+$versionManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\0.5.1\manifest.json')).LastWriteTimeUtc
 $bucketWriteTime = (Get-Item (Join-Path $Root 'buckets\main')).LastWriteTimeUtc
 Start-Sleep -Milliseconds 1100
 
@@ -222,7 +222,7 @@ if ((Get-Item $versionExe).LastWriteTimeUtc -ne $versionWriteTime) {
 if ((Get-Item (Join-Path $Root 'apps\sco\current\manifest.json')).LastWriteTimeUtc -ne $runtimeManifestWriteTime) {
     throw 'second init rewrote current sco manifest'
 }
-if ((Get-Item (Join-Path $Root 'apps\sco\0.5.0\manifest.json')).LastWriteTimeUtc -ne $versionManifestWriteTime) {
+if ((Get-Item (Join-Path $Root 'apps\sco\0.5.1\manifest.json')).LastWriteTimeUtc -ne $versionManifestWriteTime) {
     throw 'second init rewrote version sco manifest'
 }
 if ((Get-Item (Join-Path $Root 'buckets\main')).LastWriteTimeUtc -ne $bucketWriteTime) {
