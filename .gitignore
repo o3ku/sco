@@ -1,0 +1,9 @@
+build/
+ref/
+.claude/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.vs/
+CMakeSettings.json

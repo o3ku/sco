@@ -1,0 +1,26 @@
+{
+  "buckets": [
+    {
+      "count": 1,
+      "max_write_time": 0,
+      "name": "main",
+      "path": "D:/sss/sco/testdata/scoop-home/buckets/main",
+      "size_sum": 88,
+      "time_sum": 13424431788774898700
+    }
+  ],
+  "entries": [
+    {
+      "bins": [
+        "grep"
+      ],
+      "bucket": "main",
+      "description": "Pattern search utility",
+      "name": "grep",
+      "path": "D:/sss/sco/testdata/scoop-home/buckets/main/bucket/grep.json",
+      "shortcuts": [],
+      "version": "3.11"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,5 @@
+{
+  "version": "3.11",
+  "description": "Pattern search utility",
+  "bin": "grep.exe"
+}
