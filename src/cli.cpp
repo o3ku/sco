@@ -8918,14 +8918,41 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                     err << "WARN  Cannot find the known 'main' bucket repository.\n";
                 } else {
                     const auto source_path = std::filesystem::path(*repository);
-                    const auto result = (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git"))
-                        ? add_local_bucket(environment, "main", source_path)
-                        : add_git_bucket(environment, "main", *repository);
-                    if (!result.changed) {
-                        out << "Main bucket is already added.\n";
+                    bool added = false;
+                    if (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git")) {
+                        const auto result = add_local_bucket(environment, "main", source_path);
+                        added = result.changed;
                     } else {
-                        out << "Added main bucket.\n";
+                        try {
+                            const auto result = add_git_bucket(environment, "main", *repository);
+                            added = result.changed;
+                        } catch (const std::exception&) {
+                            const auto zip_url = *repository + "/archive/refs/heads/master.zip";
+                            const auto zip_path = environment.cache_dir / "main-bucket.zip";
+                            std::filesystem::create_directories(environment.cache_dir);
+                            out << "Downloading main bucket...\n";
+                            const HttpClient http;
+                            const auto response = http.get(zip_url);
+                            if (response.status != 200) {
+                                throw std::runtime_error("failed to download main bucket (HTTP " + std::to_string(response.status) + ")");
+                            }
+                            {
+                                std::ofstream zip_stream(zip_path, std::ios::binary);
+                                zip_stream.write(response.body.data(), static_cast<std::streamsize>(response.body.size()));
+                            }
+                            const auto extract_dir = environment.cache_dir / "main-bucket-extract";
+                            if (std::filesystem::exists(extract_dir)) {
+                                std::filesystem::remove_all(extract_dir);
+                            }
+                            const auto unzip_cmd = "powershell -NoProfile -Command \"Expand-Archive -LiteralPath '" + zip_path.string() + "' -DestinationPath '" + extract_dir.string() + "' -Force\"";
+                            if (std::system(unzip_cmd.c_str()) != 0) {
+                                throw std::runtime_error("failed to extract main bucket archive");
+                            }
+                            const auto result = add_local_bucket(environment, "main", extract_dir / "Main-master");
+                            added = result.changed;
+                        }
                     }
+                    out << (added ? "Added main bucket.\n" : "Main bucket is already added.\n");
                 }
             } catch (const std::exception& bucket_error) {
                 err << "WARN  Could not add main bucket: " << bucket_error.what() << "\n";
