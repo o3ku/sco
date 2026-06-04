@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.6.0"
+#define SCO_VERSION "0.6.1"
 #endif
 
 namespace sco {
@@ -7130,7 +7130,7 @@ int Cli::run_help(const std::vector<std::string>& args, std::ostream& out, std::
 
 void Cli::print_version(std::ostream& out) {
     out << "Current Scoop version:\n"
-        << "sco 0.6.0\n\n";
+        << "sco 0.6.1\n\n";
 }
 
 int Cli::inspect_manifest(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
@@ -8866,7 +8866,7 @@ std::string init_bucket_manifest_url(const Environment& environment, const std::
         : github_mirror + "/ScoopInstaller/Main/master/bucket/" + app + ".json";
 }
 
-InstallResult install_init_bootstrap_app(
+std::filesystem::path materialize_init_bucket_manifest(
     const Environment& environment,
     const std::string& app,
     std::ostream& err) {
@@ -8875,13 +8875,183 @@ InstallResult install_init_bootstrap_app(
     if (manifest_path.empty()) {
         throw std::runtime_error("failed to download " + app + " manifest");
     }
+    return manifest_path;
+}
+
+void prepend_current_process_path(const std::filesystem::path& directory) {
+    std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
+    if (!path.empty()) {
+        path = directory.string() + ";" + path;
+    } else {
+        path = directory.string();
+    }
+    _putenv_s("PATH", path.c_str());
+}
+
+std::wstring quote_init_process_arg(const std::wstring& value) {
+    std::wstring quoted = L"\"";
+    std::size_t backslashes = 0;
+    for (const auto ch : value) {
+        if (ch == L'\\') {
+            ++backslashes;
+            continue;
+        }
+        if (ch == L'\"') {
+            quoted.append(backslashes * 2 + 1, L'\\');
+            quoted.push_back(ch);
+        } else {
+            quoted.append(backslashes, L'\\');
+            quoted.push_back(ch);
+        }
+        backslashes = 0;
+    }
+    quoted.append(backslashes * 2, L'\\');
+    quoted.push_back(L'\"');
+    return quoted;
+}
+
+int run_init_process(const std::filesystem::path& executable, const std::vector<std::string>& args) {
+    auto command_line = quote_init_process_arg(executable.wstring());
+    for (const auto& arg : args) {
+        command_line += L" ";
+        command_line += quote_init_process_arg(std::filesystem::path(arg).wstring());
+    }
+
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    auto mutable_command_line = std::vector<wchar_t>(command_line.begin(), command_line.end());
+    mutable_command_line.push_back(L'\0');
+    if (CreateProcessW(executable.wstring().c_str(), mutable_command_line.data(), nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startup, &process) == 0) {
+        return 1;
+    }
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return static_cast<int>(exit_code);
+}
+
+void download_init_binary(const std::string& url, const std::filesystem::path& destination) {
+    const HttpClient client;
+    const auto response = client.get(url, std::vector<std::pair<std::string, std::string>>{}, 120);
+    if (response.status < 200 || response.status >= 300) {
+        throw std::runtime_error("failed to download " + url);
+    }
+
+    std::filesystem::create_directories(destination.parent_path());
+    std::ofstream stream(destination, std::ios::binary);
+    if (!stream) {
+        throw std::runtime_error("cannot write " + destination.string());
+    }
+    stream.write(response.body.data(), static_cast<std::streamsize>(response.body.size()));
+}
+
+std::string digits_only(std::string value) {
+    value.erase(std::remove_if(value.begin(), value.end(), [](unsigned char ch) {
+        return std::isdigit(ch) == 0;
+    }), value.end());
+    return value;
+}
+
+void strip_manifest_url_fragments(nlohmann::ordered_json& value) {
+    if (value.is_object()) {
+        for (auto& item : value.items()) {
+            if (lower_ascii(item.key()) == "url") {
+                if (item.value().is_string()) {
+                    item.value() = strip_url_fragment(item.value().get<std::string>());
+                } else if (item.value().is_array()) {
+                    for (auto& url : item.value()) {
+                        if (url.is_string()) {
+                            url = strip_url_fragment(url.get<std::string>());
+                        }
+                    }
+                }
+            } else {
+                strip_manifest_url_fragments(item.value());
+            }
+        }
+        return;
+    }
+
+    if (value.is_array()) {
+        for (auto& item : value) {
+            strip_manifest_url_fragments(item);
+        }
+    }
+}
+
+std::filesystem::path ensure_init_7zip_extractor(const Environment& environment, std::ostream& out, std::ostream& err) {
+    if (const auto existing = find_7zip(environment)) {
+        return *existing;
+    }
+
+    const auto manifest_path = materialize_init_bucket_manifest(environment, "7zip", err);
+    const auto manifest = read_ordered_json_file_or_throw(manifest_path);
+    const auto* version_value = ordered_json_property(manifest, "version");
+    if (version_value == nullptr || !version_value->is_string() || version_value->get<std::string>().empty()) {
+        throw std::runtime_error("7zip manifest does not contain a version");
+    }
+
+    const auto version = version_value->get<std::string>();
+    const auto directory = environment.cache_dir / "bootstrap" / "7zip" / version;
+    const auto executable = directory / "7z.exe";
+    const auto seven_za = directory / "7za.exe";
+    if (!std::filesystem::is_regular_file(seven_za)) {
+        out << "7zip is not installed. Downloading portable 7-Zip extractor...\n";
+        const auto seven_zr = directory / "7zr.exe";
+        if (!std::filesystem::is_regular_file(seven_zr)) {
+            download_init_binary("https://github.com/ip7z/7zip/releases/download/" + version + "/7zr.exe", seven_zr);
+        }
+
+        const auto clean_version = digits_only(version);
+        const auto extra_archive = directory / ("7z" + clean_version + "-extra.7z");
+        if (!std::filesystem::is_regular_file(extra_archive)) {
+            download_init_binary("https://github.com/ip7z/7zip/releases/download/" + version + "/7z" + clean_version + "-extra.7z", extra_archive);
+        }
+
+        const std::vector<std::string> args{"x", extra_archive.string(), "-o" + directory.string(), "7za.exe", "-y"};
+        if (run_init_process(seven_zr, args) != 0 || !std::filesystem::is_regular_file(seven_za)) {
+            throw std::runtime_error("failed to extract portable 7za from " + extra_archive.string());
+        }
+        out << "Downloaded portable 7-Zip extractor " << version << ".\n";
+    }
+
+    if (!std::filesystem::is_regular_file(executable) || !files_have_same_content(executable, seven_za)) {
+        std::filesystem::copy_file(seven_za, executable, std::filesystem::copy_options::overwrite_existing);
+    }
+
+    prepend_current_process_path(directory);
+    out << "Added portable 7-Zip extractor to PATH for this session.\n";
+    return executable;
+}
+
+InstallResult install_init_git(const Environment& environment, std::ostream& err) {
+    const auto manifest_url = init_bucket_manifest_url(environment, "git");
+    const auto manifest_path = materialize_manifest_url(environment, manifest_url, err, "init");
+    if (manifest_path.empty()) {
+        throw std::runtime_error("failed to download git manifest");
+    }
+
+    auto manifest = read_ordered_json_file_or_throw(manifest_path);
+    if (manifest.is_object()) {
+        manifest.erase("pre_install");
+        manifest.erase("post_install");
+        manifest.erase("shortcuts");
+        strip_manifest_url_fragments(manifest);
+    }
+    const auto bootstrap_manifest = environment.cache_dir / "bootstrap" / "manifests" / "git.json";
+    std::filesystem::create_directories(bootstrap_manifest.parent_path());
+    write_ordered_json_file(bootstrap_manifest, manifest);
 
     InstallOptions options;
     options.independent = true;
     options.use_cache = false;
     options.check_hash = false;
     options.update_scoop = false;
-    return install_manifest_file(environment, manifest_path, options);
+    options.source_url = manifest_url;
+    return install_manifest_file(environment, bootstrap_manifest, options);
 }
 
 void ensure_git_for_init(const Environment& environment, std::ostream& out, std::ostream& err) {
@@ -8890,22 +9060,15 @@ void ensure_git_for_init(const Environment& environment, std::ostream& out, std:
     }
 
     if (!find_7zip(environment)) {
-        out << "7zip is not installed. Installing 7zip...\n";
-        const auto result = install_init_bootstrap_app(environment, "7zip", err);
-        out << "Installed 7zip " << result.version << ".\n";
+        ensure_init_7zip_extractor(environment, out, err);
     }
 
     out << "Git is not installed. Installing git...\n";
-    const auto result = install_init_bootstrap_app(environment, "git", err);
+    const auto result = install_init_git(environment, err);
     out << "Installed git " << result.version << ".\n";
 
     const auto git_bin_dir = result.install_dir / "cmd";
-    std::string path = std::getenv("PATH") ? std::getenv("PATH") : "";
-    if (!path.empty()) {
-        path += ";";
-    }
-    path += git_bin_dir.string();
-    _putenv_s("PATH", path.c_str());
+    prepend_current_process_path(git_bin_dir);
     out << "Added git to PATH for this session.\n";
 }
 

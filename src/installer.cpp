@@ -1108,6 +1108,7 @@ bool is_archive(const std::filesystem::path& path) {
         name.ends_with(".txz") ||
         name.ends_with(".nupkg") ||
         name.ends_with(".msi") ||
+        name.ends_with(".7z.exe") ||
         name.ends_with(".7z") ||
         name.ends_with(".001") ||
         name.ends_with(".rar") ||
@@ -1135,7 +1136,8 @@ bool archive_requires_7zip(const std::filesystem::path& path) {
         name.ends_with(".nupkg")) {
         return false;
     }
-    return name.ends_with(".7z") ||
+    return name.ends_with(".7z.exe") ||
+        name.ends_with(".7z") ||
         name.ends_with(".001") ||
         name.ends_with(".rar") ||
         name.ends_with(".part01.rar") ||
