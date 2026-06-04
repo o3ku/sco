@@ -103,6 +103,7 @@ UninstallResult uninstall_app(
 CleanupResult cleanup_app(const Environment& environment, const std::string& app, bool global = false);
 ResetResult reset_app(const Environment& environment, const std::string& app, const std::string& version = {}, bool global = false);
 std::filesystem::path current_executable_path();
+std::optional<std::filesystem::path> find_7zip(const Environment& environment);
 int try_run_as_shim(int argc, wchar_t** argv);
 
 } // namespace sco

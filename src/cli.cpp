@@ -8937,7 +8937,6 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
         } else {
             try {
                 if (!git_available()) {
-                    out << "Git is not installed. Installing git...\n";
                     const ConfigStore init_config(environment.config_file);
                     std::string github_mirror;
                     if (const auto mirror = init_config.get("github_mirror")) {
@@ -8945,25 +8944,43 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                             github_mirror = mirror->get<std::string>();
                         }
                     }
-                    const std::string git_manifest_url = github_mirror.empty()
-                        ? "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json"
-                        : github_mirror + "/ScoopInstaller/Main/master/bucket/git.json";
-                    const auto manifest_path = materialize_manifest_url(environment, git_manifest_url, err, "init");
-                    if (manifest_path.empty()) {
-                        throw std::runtime_error("failed to download git manifest from " + git_manifest_url);
+                    auto make_manifest_url = [&](const std::string& app) -> std::string {
+                        return github_mirror.empty()
+                            ? "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/" + app + ".json"
+                            : github_mirror + "/ScoopInstaller/Main/master/bucket/" + app + ".json";
+                    };
+
+                    if (!find_7zip(environment)) {
+                        out << "7zip is not installed. Installing 7zip...\n";
+                        const auto seven_zip_manifest = materialize_manifest_url(environment, make_manifest_url("7zip"), err, "init");
+                        if (seven_zip_manifest.empty()) {
+                            throw std::runtime_error("failed to download 7zip manifest");
+                        }
+                        InstallOptions sz_options;
+                        sz_options.independent = true;
+                        sz_options.use_cache = false;
+                        sz_options.check_hash = false;
+                        sz_options.update_scoop = false;
+                        const auto sz_result = install_manifest_file(environment, seven_zip_manifest, sz_options);
+                        out << "Installed 7zip " << sz_result.version << ".\n";
+                    }
+
+                    out << "Git is not installed. Installing git...\n";
+                    const auto git_manifest = materialize_manifest_url(environment, make_manifest_url("git"), err, "init");
+                    if (git_manifest.empty()) {
+                        throw std::runtime_error("failed to download git manifest");
                     }
                     InstallOptions git_options;
                     git_options.independent = true;
                     git_options.use_cache = false;
                     git_options.check_hash = false;
                     git_options.update_scoop = false;
-                    const auto git_result = install_manifest_file(environment, manifest_path, git_options);
+                    const auto git_result = install_manifest_file(environment, git_manifest, git_options);
                     out << "Installed git " << git_result.version << ".\n";
                     const auto git_bin_dir = git_result.install_dir / "cmd";
-                    const auto git_bin_dir_str = git_bin_dir.string();
                     std::string original_path = std::getenv("PATH") ? std::getenv("PATH") : "";
                     if (!original_path.empty()) original_path += ";";
-                    original_path += git_bin_dir_str;
+                    original_path += git_bin_dir.string();
                     _putenv_s("PATH", original_path.c_str());
                     out << "Added git to PATH for this session.\n";
                 }

@@ -1217,7 +1217,7 @@ std::optional<std::filesystem::path> find_file_under(const std::filesystem::path
     return std::nullopt;
 }
 
-std::optional<std::filesystem::path> find_7zip(const Environment& environment) {
+std::optional<std::filesystem::path> find_7zip_public(const Environment& environment) {
     const auto use_external_7zip = ConfigStore(environment.config_file).get("use_external_7zip");
     if (use_external_7zip && use_external_7zip->is_boolean() && use_external_7zip->get<bool>()) {
         return find_executable_on_path("7z");
@@ -1496,7 +1496,7 @@ void extract_archive(const Environment& environment, const std::filesystem::path
         extract_msi_archive(environment, archive, destination);
         return;
     } else if (archive_requires_7zip(archive)) {
-        const auto seven_zip = find_7zip(environment);
+        const auto seven_zip = find_7zip_public(environment);
         if (!seven_zip) {
             throw std::runtime_error("cannot find 7-Zip to extract " + archive.string());
         }
@@ -2261,6 +2261,10 @@ std::vector<std::string> fetch_and_validate_artifacts(
 }
 
 } // namespace
+
+std::optional<std::filesystem::path> find_7zip(const Environment& environment) {
+    return find_7zip_public(environment);
+}
 
 std::filesystem::path current_executable_path() {
     return current_executable_path_impl();
