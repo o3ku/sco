@@ -156,7 +156,7 @@ $listOutput = (& $ScoExe list) -join "`n"
 if ($LASTEXITCODE -ne 0) {
     throw "list after init failed: $listOutput"
 }
-if ($listOutput -notmatch 'sco\s+0\.6\.0') {
+if ($listOutput -notmatch 'sco\s+0\.6\.1') {
     throw "list after init should show sco as a normal installed app: $listOutput"
 }
 if ($listOutput -match 'Install failed') {
@@ -167,7 +167,7 @@ $scoopListOutput = (& powershell -NoProfile -ExecutionPolicy Bypass -File $Scoop
 if ($LASTEXITCODE -ne 0) {
     throw "reference scoop list after init failed: $scoopListOutput"
 }
-if ($scoopListOutput -notmatch 'sco\s+0\.6\.0') {
+if ($scoopListOutput -notmatch 'sco\s+0\.6\.1') {
     throw "reference scoop list after init should show sco as a normal installed app: $scoopListOutput"
 }
 if ($scoopListOutput -match 'Install failed') {

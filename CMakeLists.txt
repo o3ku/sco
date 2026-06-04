@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(sco VERSION 0.6.1 LANGUAGES CXX)
+project(sco VERSION 0.6.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,7 +69,7 @@ endif()
 enable_testing()
 
 add_test(NAME sco_version COMMAND sco --version)
-set_tests_properties(sco_version PROPERTIES PASS_REGULAR_EXPRESSION "sco 0\\.6\\.1")
+set_tests_properties(sco_version PROPERTIES PASS_REGULAR_EXPRESSION "sco 0\\.6\\.2")
 
 add_test(NAME sco_versions_compare COMMAND sco_versions_tests)
 
