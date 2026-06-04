@@ -8936,11 +8936,41 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
             out << "Main bucket is already added.\n";
         } else {
             try {
+                if (!git_available()) {
+                    out << "Git is not installed. Installing git...\n";
+                    const ConfigStore init_config(environment.config_file);
+                    std::string github_mirror;
+                    if (const auto mirror = init_config.get("github_mirror")) {
+                        if (mirror->is_string()) {
+                            github_mirror = mirror->get<std::string>();
+                        }
+                    }
+                    const std::string git_manifest_url = github_mirror.empty()
+                        ? "https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json"
+                        : github_mirror + "/ScoopInstaller/Main/master/bucket/git.json";
+                    const auto manifest_path = materialize_manifest_url(environment, git_manifest_url, err, "init");
+                    if (manifest_path.empty()) {
+                        throw std::runtime_error("failed to download git manifest from " + git_manifest_url);
+                    }
+                    InstallOptions git_options;
+                    git_options.independent = true;
+                    git_options.use_cache = false;
+                    git_options.check_hash = false;
+                    git_options.update_scoop = false;
+                    const auto git_result = install_manifest_file(environment, manifest_path, git_options);
+                    out << "Installed git " << git_result.version << ".\n";
+                    const auto git_bin_dir = git_result.install_dir / "cmd";
+                    const auto git_bin_dir_str = git_bin_dir.string();
+                    std::string original_path = std::getenv("PATH") ? std::getenv("PATH") : "";
+                    if (!original_path.empty()) original_path += ";";
+                    original_path += git_bin_dir_str;
+                    _putenv_s("PATH", original_path.c_str());
+                    out << "Added git to PATH for this session.\n";
+                }
+
                 const auto repository = known_bucket_repository(environment, "main");
                 if (!repository) {
                     err << "WARN  Cannot find the known 'main' bucket repository.\n";
-                } else if (!git_available()) {
-                    err << "ERROR Git is not installed. Please install Git first: https://git-scm.com\n";
                 } else {
                     const auto source_path = std::filesystem::path(*repository);
                     bool added = false;
