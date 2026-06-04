@@ -8912,19 +8912,24 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
         if (local_bucket_exists(environment, "main")) {
             out << "Main bucket is already added.\n";
         } else {
-            const auto repository = known_bucket_repository(environment, "main");
-            if (!repository) {
-                err << "sco init: cannot find the known 'main' bucket repository.\n";
-                return 1;
-            }
-            const auto source_path = std::filesystem::path(*repository);
-            const auto result = (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git"))
-                ? add_local_bucket(environment, "main", source_path)
-                : add_git_bucket(environment, "main", *repository);
-            if (!result.changed) {
-                out << "Main bucket is already added.\n";
-            } else {
-                out << "Added main bucket.\n";
+            try {
+                const auto repository = known_bucket_repository(environment, "main");
+                if (!repository) {
+                    err << "WARN  Cannot find the known 'main' bucket repository.\n";
+                } else {
+                    const auto source_path = std::filesystem::path(*repository);
+                    const auto result = (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git"))
+                        ? add_local_bucket(environment, "main", source_path)
+                        : add_git_bucket(environment, "main", *repository);
+                    if (!result.changed) {
+                        out << "Main bucket is already added.\n";
+                    } else {
+                        out << "Added main bucket.\n";
+                    }
+                }
+            } catch (const std::exception& bucket_error) {
+                err << "WARN  Could not add main bucket: " << bucket_error.what() << "\n";
+                err << "You can add it later with: sco bucket add main\n";
             }
         }
 
