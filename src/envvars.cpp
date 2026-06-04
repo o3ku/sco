@@ -348,6 +348,20 @@ std::string path_var_reference(const std::string& name) {
     return "%" + name + "%";
 }
 
+#ifdef _WIN32
+void broadcast_environment_change() {
+    DWORD_PTR result = 0;
+    SendMessageTimeoutA(
+        HWND_BROADCAST,
+        WM_SETTINGCHANGE,
+        0,
+        reinterpret_cast<LPARAM>("Environment"),
+        SMTO_ABORTIFHUNG,
+        5000,
+        &result);
+}
+#endif
+
 std::string get_user_env(const std::string& name, bool global) {
 #ifdef _WIN32
     HKEY root = global ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
@@ -403,6 +417,7 @@ void set_user_env(const std::string& name, const std::string& value, bool global
         }
     }
     RegCloseKey(key);
+    broadcast_environment_change();
 #else
     (void)global;
     if (value.empty()) {

@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.6.3"
+#define SCO_VERSION "0.6.4"
 #endif
 
 namespace sco {
