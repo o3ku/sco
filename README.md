@@ -2,6 +2,24 @@
 
 A high-performance native C++ reimplementation of [Scoop](https://github.com/ScoopInstaller/Scoop), the Windows command-line package manager. Built as a compiled binary (`sco.exe`) for faster startup, reduced overhead, and no PowerShell runtime dependency — while maintaining full compatibility with the existing Scoop ecosystem (manifests, buckets, shims, config).
 
+## Install
+
+Download the latest release and initialize (pick your shell):
+
+**PowerShell**
+
+```powershell
+Invoke-WebRequest -Uri ((Invoke-RestMethod https://api.github.com/repos/o3ku/sco/releases/latest).assets[0].browser_download_url) -OutFile sco.exe; .\sco.exe init
+```
+
+**CMD**
+
+```cmd
+curl -sLO https://github.com/o3ku/sco/releases/latest/download/sco.exe && sco.exe init
+```
+
+> After `sco init` completes, restart your terminal and `sco` is ready to use.
+
 ## Features
 
 - **Full Scoop compatibility** — Reads standard Scoop JSON manifests, supports `url`, `hash`, `bin`, `extract_dir`, `depends`, `pre_install`/`post_install` scripts, `env_add_path`, `env_set`, `shortcuts`, `persist`, architecture-specific sections, and autoupdate
