@@ -123,7 +123,7 @@ $runtimeExe = Join-Path $Root 'apps\sco\current\sco.exe'
 if (!(Test-Path $runtimeExe)) {
     throw 'init did not install sco.exe into the Scoop runtime directory'
 }
-$versionExe = Join-Path $Root 'apps\sco\0.6.1\sco.exe'
+$versionExe = Join-Path $Root 'apps\sco\0.6.2\sco.exe'
 if (!(Test-Path $versionExe)) {
     throw 'init did not install sco.exe into the Scoop runtime version directory'
 }
@@ -136,15 +136,15 @@ if ((Get-Sha256Hex $versionExe) -ne (Get-Sha256Hex $ScoExe)) {
 foreach ($path in @(
     (Join-Path $Root 'apps\sco\current\manifest.json'),
     (Join-Path $Root 'apps\sco\current\install.json'),
-    (Join-Path $Root 'apps\sco\0.6.1\manifest.json'),
-    (Join-Path $Root 'apps\sco\0.6.1\install.json')
+    (Join-Path $Root 'apps\sco\0.6.2\manifest.json'),
+    (Join-Path $Root 'apps\sco\0.6.2\install.json')
 )) {
     if (!(Test-Path $path)) {
         throw "init did not create Scoop-compatible sco metadata: $path"
     }
 }
 $scoManifest = Get-Content (Join-Path $Root 'apps\sco\current\manifest.json') -Raw | ConvertFrom-Json
-if ($scoManifest.version -ne '0.6.1' -or $scoManifest.bin -ne 'sco.exe') {
+if ($scoManifest.version -ne '0.6.2' -or $scoManifest.bin -ne 'sco.exe') {
     throw "sco runtime manifest is invalid: $($scoManifest | ConvertTo-Json -Compress)"
 }
 $shimContent = Get-Content -Path $shim -Raw
@@ -156,7 +156,7 @@ $listOutput = (& $ScoExe list) -join "`n"
 if ($LASTEXITCODE -ne 0) {
     throw "list after init failed: $listOutput"
 }
-if ($listOutput -notmatch 'sco\s+0\.6\.1') {
+if ($listOutput -notmatch 'sco\s+0\.6\.2') {
     throw "list after init should show sco as a normal installed app: $listOutput"
 }
 if ($listOutput -match 'Install failed') {
@@ -167,7 +167,7 @@ $scoopListOutput = (& powershell -NoProfile -ExecutionPolicy Bypass -File $Scoop
 if ($LASTEXITCODE -ne 0) {
     throw "reference scoop list after init failed: $scoopListOutput"
 }
-if ($scoopListOutput -notmatch 'sco\s+0\.6\.1') {
+if ($scoopListOutput -notmatch 'sco\s+0\.6\.2') {
     throw "reference scoop list after init should show sco as a normal installed app: $scoopListOutput"
 }
 if ($scoopListOutput -match 'Install failed') {
@@ -191,7 +191,7 @@ $shimWriteTime = (Get-Item $shim).LastWriteTimeUtc
 $runtimeWriteTime = (Get-Item $runtimeExe).LastWriteTimeUtc
 $versionWriteTime = (Get-Item $versionExe).LastWriteTimeUtc
 $runtimeManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\current\manifest.json')).LastWriteTimeUtc
-$versionManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\0.6.1\manifest.json')).LastWriteTimeUtc
+$versionManifestWriteTime = (Get-Item (Join-Path $Root 'apps\sco\0.6.2\manifest.json')).LastWriteTimeUtc
 $bucketWriteTime = (Get-Item (Join-Path $Root 'buckets\main')).LastWriteTimeUtc
 Start-Sleep -Milliseconds 1100
 
@@ -233,7 +233,7 @@ if ((Get-Item $versionExe).LastWriteTimeUtc -ne $versionWriteTime) {
 if ((Get-Item (Join-Path $Root 'apps\sco\current\manifest.json')).LastWriteTimeUtc -ne $runtimeManifestWriteTime) {
     throw 'second init rewrote current sco manifest'
 }
-if ((Get-Item (Join-Path $Root 'apps\sco\0.6.1\manifest.json')).LastWriteTimeUtc -ne $versionManifestWriteTime) {
+if ((Get-Item (Join-Path $Root 'apps\sco\0.6.2\manifest.json')).LastWriteTimeUtc -ne $versionManifestWriteTime) {
     throw 'second init rewrote version sco manifest'
 }
 if ((Get-Item (Join-Path $Root 'buckets\main')).LastWriteTimeUtc -ne $bucketWriteTime) {

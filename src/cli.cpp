@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.6.2"
+#define SCO_VERSION "0.6.3"
 #endif
 
 namespace sco {
@@ -9050,9 +9050,16 @@ InstallResult install_init_git(const Environment& environment, std::ostream& err
     options.use_cache = false;
     options.check_hash = false;
     options.update_scoop = false;
-    options.force = true;
     options.source_url = manifest_url;
-    return install_manifest_file(environment, bootstrap_manifest, options);
+    auto result = install_manifest_file(environment, bootstrap_manifest, options);
+    if (result.already_installed) {
+        write_ordered_json_file(result.install_dir / "manifest.json", manifest);
+        const auto reset = reset_app(environment, "git", result.version, false);
+        if (reset.reset) {
+            result.current_dir = reset.current_dir;
+        }
+    }
+    return result;
 }
 
 void ensure_git_for_init(const Environment& environment, std::ostream& out, std::ostream& err) {
