@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.3.0"
+#define SCO_VERSION "0.4.0"
 #endif
 
 namespace sco {
@@ -7104,7 +7104,7 @@ int Cli::run_help(const std::vector<std::string>& args, std::ostream& out, std::
 
 void Cli::print_version(std::ostream& out) {
     out << "Current Scoop version:\n"
-        << "sco 0.3.0\n\n";
+        << "sco 0.4.0\n\n";
 }
 
 int Cli::inspect_manifest(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
