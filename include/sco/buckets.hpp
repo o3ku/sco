@@ -55,8 +55,10 @@ struct KnownBucket {
 
 std::vector<KnownBucket> list_known_buckets(const std::filesystem::path& start = std::filesystem::current_path());
 std::vector<LocalBucket> list_local_buckets(const Environment& environment);
+bool git_available();
 BucketChangeResult add_local_bucket(const Environment& environment, const std::string& name, const std::filesystem::path& source);
 BucketChangeResult add_git_bucket(const Environment& environment, const std::string& name, const std::string& repository);
+BucketChangeResult add_bucket_from_zip(const Environment& environment, const std::string& name, const std::string& repository);
 BucketChangeResult remove_bucket(const Environment& environment, const std::string& name);
 std::vector<BucketUpdateResult> update_buckets(const Environment& environment, const std::string& name = {});
 std::optional<std::filesystem::path> find_manifest_in_buckets(const Environment& environment, const std::string& app);

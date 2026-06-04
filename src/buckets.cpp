@@ -877,6 +877,10 @@ std::size_t count_bucket_manifests(const std::filesystem::path& manifests) {
 
 } // namespace
 
+bool git_available() {
+    return std::system("git --version >NUL 2>NUL") == 0;
+}
+
 std::vector<KnownBucket> list_known_buckets(const std::filesystem::path& start) {
     std::vector<KnownBucket> buckets;
     const auto path = find_known_buckets_file(start);
@@ -1023,6 +1027,50 @@ BucketChangeResult add_git_bucket(const Environment& environment, const std::str
     if (!std::filesystem::is_directory(destination / "bucket")) {
         std::filesystem::remove_all(destination);
         throw std::runtime_error("cloned bucket does not contain a bucket directory: " + destination.string());
+    }
+
+    return BucketChangeResult{.name = name, .path = destination, .changed = true};
+}
+
+BucketChangeResult add_bucket_from_zip(const Environment& environment, const std::string& name, const std::string& repository) {
+    validate_bucket_name(name);
+    const auto destination = environment.buckets_dir() / name;
+    if (std::filesystem::exists(destination)) {
+        return BucketChangeResult{.name = name, .path = destination, .changed = false, .reason = BucketChangeReason::NameAlreadyExists};
+    }
+
+    const auto zip_url = repository + "/archive/refs/heads/master.zip";
+    const auto zip_path = environment.cache_dir / (name + "-bucket.zip");
+    const auto extract_dir = environment.cache_dir / (name + "-bucket-extract");
+    std::filesystem::create_directories(environment.cache_dir);
+    if (std::filesystem::exists(extract_dir)) {
+        std::filesystem::remove_all(extract_dir);
+    }
+
+    const auto repo_name = std::filesystem::path(repository).filename().string();
+    const auto extract_bucket = extract_dir / (repo_name + "-master");
+
+    const auto download_cmd =
+        "powershell -NoProfile -Command \""
+        "Invoke-WebRequest -Uri '" + zip_url + "' -OutFile '" + zip_path.string() + "'"
+        "; Expand-Archive -LiteralPath '" + zip_path.string() + "' -DestinationPath '" + extract_dir.string() + "' -Force"
+        "\"";
+    if (std::system(download_cmd.c_str()) != 0) {
+        throw std::runtime_error("failed to download or extract bucket '" + name + "' from " + zip_url);
+    }
+
+    if (!std::filesystem::is_directory(extract_bucket / "bucket")) {
+        if (std::filesystem::exists(extract_dir)) {
+            std::filesystem::remove_all(extract_dir);
+        }
+        throw std::runtime_error("downloaded bucket '" + name + "' does not contain a bucket directory");
+    }
+
+    std::filesystem::create_directories(environment.buckets_dir());
+    std::filesystem::rename(extract_bucket, destination);
+
+    if (std::filesystem::exists(extract_dir)) {
+        std::filesystem::remove_all(extract_dir);
     }
 
     return BucketChangeResult{.name = name, .path = destination, .changed = true};

@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.5.1"
+#define SCO_VERSION "0.6.0"
 #endif
 
 namespace sco {
@@ -7130,7 +7130,7 @@ int Cli::run_help(const std::vector<std::string>& args, std::ostream& out, std::
 
 void Cli::print_version(std::ostream& out) {
     out << "Current Scoop version:\n"
-        << "sco 0.5.1\n\n";
+        << "sco 0.6.0\n\n";
 }
 
 int Cli::inspect_manifest(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
@@ -8945,36 +8945,29 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                     if (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git")) {
                         const auto result = add_local_bucket(environment, "main", source_path);
                         added = result.changed;
-                    } else {
+                    } else if (git_available()) {
                         try {
                             const auto result = add_git_bucket(environment, "main", *repository);
                             added = result.changed;
                         } catch (const std::exception&) {
-                            const auto zip_url = *repository + "/archive/refs/heads/master.zip";
-                            const auto zip_path = environment.cache_dir / "main-bucket.zip";
-                            const auto extract_dir = environment.cache_dir / "main-bucket-extract";
-                            std::filesystem::create_directories(environment.cache_dir);
-                            if (std::filesystem::exists(extract_dir)) {
-                                std::filesystem::remove_all(extract_dir);
-                            }
                             out << "Downloading main bucket...\n";
-                            const auto download_cmd =
-                                "powershell -NoProfile -Command \""
-                                "Invoke-WebRequest -Uri '" + zip_url + "' -OutFile '" + zip_path.string() + "'"
-                                "; Expand-Archive -LiteralPath '" + zip_path.string() + "' -DestinationPath '" + extract_dir.string() + "' -Force"
-                                "\"";
-                            if (std::system(download_cmd.c_str()) != 0) {
-                                throw std::runtime_error("failed to download or extract main bucket");
-                            }
-                            const auto result = add_local_bucket(environment, "main", extract_dir / "Main-master");
+                            const auto result = add_bucket_from_zip(environment, "main", *repository);
                             added = result.changed;
                         }
+                    } else {
+                        out << "Git not found, downloading main bucket...\n";
+                        const auto result = add_bucket_from_zip(environment, "main", *repository);
+                        added = result.changed;
                     }
                     out << (added ? "Added main bucket.\n" : "Main bucket is already added.\n");
                 }
             } catch (const std::exception& bucket_error) {
                 err << "WARN  Could not add main bucket: " << bucket_error.what() << "\n";
-                err << "You can add it later with: sco bucket add main\n";
+                if (!git_available()) {
+                    err << "Git is not installed. Install Git and retry: https://git-scm.com\n";
+                } else {
+                    err << "You can add it later with: sco bucket add main\n";
+                }
             }
         }
 
@@ -10588,8 +10581,16 @@ int Cli::run_bucket(const std::vector<std::string>& args, std::ostream& out, std
             const auto source_path = std::filesystem::path(source);
             if (std::filesystem::is_directory(source_path) && !std::filesystem::exists(source_path / ".git")) {
                 result = add_local_bucket(environment, args[2], source_path);
+            } else if (git_available()) {
+                try {
+                    result = add_git_bucket(environment, args[2], source);
+                } catch (const std::exception&) {
+                    out << "Downloading bucket '" << args[2] << "'...\n";
+                    result = add_bucket_from_zip(environment, args[2], source);
+                }
             } else {
-                result = add_git_bucket(environment, args[2], source);
+                out << "Git not found, downloading bucket '" << args[2] << "'...\n";
+                result = add_bucket_from_zip(environment, args[2], source);
             }
             if (!result.changed) {
                 if (result.reason == BucketChangeReason::RepositoryAlreadyExists) {
