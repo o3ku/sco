@@ -44,7 +44,7 @@
 #include <tlhelp32.h>
 
 #ifndef SCO_VERSION
-#define SCO_VERSION "0.4.0"
+#define SCO_VERSION "0.5.0"
 #endif
 
 namespace sco {
@@ -807,6 +807,32 @@ std::string lower_ascii(std::string value) {
         return static_cast<char>(std::tolower(ch));
     });
     return value;
+}
+
+const std::vector<KnownBucket>& builtin_known_buckets() {
+    static const std::vector<KnownBucket> buckets = {
+        {"main", "https://github.com/ScoopInstaller/Main"},
+        {"extras", "https://github.com/ScoopInstaller/Extras"},
+        {"versions", "https://github.com/ScoopInstaller/Versions"},
+        {"nirsoft", "https://github.com/ScoopInstaller/Nirsoft"},
+        {"sysinternals", "https://github.com/ScoopInstaller/Sysinternals"},
+        {"php", "https://github.com/ScoopInstaller/PHP"},
+        {"nerd-fonts", "https://github.com/ScoopInstaller/Nerd-Fonts"},
+        {"nonportable", "https://github.com/ScoopInstaller/Nonportable"},
+        {"java", "https://github.com/ScoopInstaller/Java"},
+        {"games", "https://github.com/ScoopInstaller/Games"},
+    };
+    return buckets;
+}
+
+std::optional<std::string> builtin_known_bucket_repository(const std::string& name) {
+    const auto normalized = lower_ascii(name);
+    for (const auto& bucket : builtin_known_buckets()) {
+        if (lower_ascii(bucket.name) == normalized) {
+            return bucket.repository;
+        }
+    }
+    return std::nullopt;
 }
 
 const nlohmann::json* json_property(const nlohmann::json& object, const char* key) {
@@ -7104,7 +7130,7 @@ int Cli::run_help(const std::vector<std::string>& args, std::ostream& out, std::
 
 void Cli::print_version(std::ostream& out) {
     out << "Current Scoop version:\n"
-        << "sco 0.4.0\n\n";
+        << "sco 0.5.0\n\n";
 }
 
 int Cli::inspect_manifest(const std::vector<std::string>& args, std::ostream& out, std::ostream& err) {
@@ -8729,10 +8755,7 @@ std::optional<std::string> known_bucket_repository(const Environment& environmen
             return bucket.repository;
         }
     }
-    if (normalized == "main") {
-        return "https://github.com/ScoopInstaller/Main";
-    }
-    return std::nullopt;
+    return builtin_known_bucket_repository(name);
 }
 
 bool shim_points_to_target(const std::filesystem::path& shim, const std::filesystem::path& target) {
@@ -8958,6 +8981,17 @@ int Cli::run_init(const std::vector<std::string>& args, std::ostream& out, std::
                 err << "WARN  Could not add main bucket: " << bucket_error.what() << "\n";
                 err << "You can add it later with: sco bucket add main\n";
             }
+        }
+
+        const auto buckets_json_path = environment.root_dir / "buckets.json";
+        if (!std::filesystem::is_regular_file(buckets_json_path)) {
+            nlohmann::ordered_json buckets;
+            for (const auto& bucket : builtin_known_buckets()) {
+                buckets[bucket.name] = bucket.repository;
+            }
+            std::ofstream stream(buckets_json_path, std::ios::binary);
+            stream << buckets.dump(4) << std::endl;
+            out << "Created known buckets registry.\n";
         }
 
         ConfigStore config(environment.config_file);
@@ -10542,7 +10576,7 @@ int Cli::run_bucket(const std::vector<std::string>& args, std::ostream& out, std
                 if (found != known.end()) {
                     source = found->repository;
                 } else {
-                    const auto fallback = known_bucket_repository(environment, args[2]);
+                    const auto fallback = builtin_known_bucket_repository(args[2]);
                     if (fallback) {
                         source = *fallback;
                     } else {
